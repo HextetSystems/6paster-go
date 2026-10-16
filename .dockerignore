@@ -1,0 +1,43 @@
+.dockerignore
+.git
+.github
+.gitignore
+.goreleaser.yaml
+
+# Never send local configuration, credentials, or tool state to the builder.
+.env
+.env.*
+config.yaml
+.agents
+.aws
+.codex
+
+# Local build, test, and runtime artifacts.
+dist
+vendor
+go.work
+go.work.sum
+*.db
+*.db-shm
+*.db-wal
+6paster
+coverage.*
+*.out
+*.test
+
+# Editor and OS metadata.
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Files not needed to compile the container image.
+*.md
+Dockerfile
+LICENSE
+Makefile
+compose.yaml
+config.example.yaml
+deploy

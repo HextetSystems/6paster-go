@@ -1,0 +1,108 @@
+# Docker
+
+The repository includes a multi-stage production `Dockerfile` and a Compose
+stack for local SQLite or MySQL use.
+
+## Build the image
+
+```sh
+docker build -t 6paster-go .
+```
+
+The final Alpine image contains only the statically built application and CA
+certificates. It runs as the unprivileged user and group `65532:65532`. The
+image declares port 8080 and expects its configuration at
+`/etc/6paster/config.yaml`.
+
+The default image command starts the server but does not apply migrations.
+Apply migrations before starting a newly deployed version. The local Compose
+services demonstrate this by running `6paster migrate` before `6paster serve`.
+
+## Local Compose profiles
+
+Start the SQLite profile:
+
+```sh
+docker compose --profile sqlite up --build
+```
+
+Or start the application with MySQL:
+
+```sh
+docker compose --profile mysql up --build
+```
+
+Both profiles publish the service at <http://localhost:8080>, apply migrations
+before serving, and persist database data in named volumes. Stop a profile with
+`docker compose --profile PROFILE down`. Add `--volumes` only when you also
+intend to delete its database data.
+
+The checked-in files under `deploy/` are local examples. They disable HTTPS and
+use development-only MySQL credentials; do not reuse those settings in
+production.
+
+## Mounts and persistence
+
+Compose short volume syntax is:
+
+```text
+SOURCE:DESTINATION[:OPTIONS]
+```
+
+`SOURCE` is a host path or Docker-managed named volume. `DESTINATION` is the
+path inside the container. For example:
+
+```yaml
+volumes:
+  - sqlite-data:/var/lib/6paster
+  - ./deploy/config.sqlite.yaml:/etc/6paster/config.yaml:ro
+```
+
+The first entry persists SQLite data in the named volume `sqlite-data`. The
+second mounts a host configuration file at the path expected by the container;
+`ro` makes that mount read-only.
+
+For SQLite, persist `/var/lib/6paster` and ensure it is writable by UID/GID
+65532. This directory contains the database and its WAL files. For MySQL, the
+database container owns persistence; the application container needs only its
+configuration file.
+
+## Production networking
+
+Do not publish the application port directly in production. Put 6paster and its
+Nginx, Caddy, or Traefik proxy on a private Docker network, omit `ports` from the
+application service, and make the proxy the only public ingress. Keep unrelated
+or untrusted containers off that network because they could otherwise bypass
+the proxy.
+
+Enable `server.require_https` and configure the proxy to replace
+`X-Forwarded-Proto` with the scheme it observed. Configure `trusted_proxies`
+only for the actual proxy networks so rate limiting receives the correct client
+address. See the README's
+[reverse-proxy guidance](README.md#reverse-proxy-and-url-prefix) for forwarding
+header handling and the built-in submission limits.
+
+A production application service will generally include:
+
+```yaml
+services:
+  paster:
+    image: 6paster-go:latest
+    networks:
+      - proxy
+    volumes:
+      - ./config.yaml:/etc/6paster/config.yaml:ro
+    command:
+      - /bin/sh
+      - -c
+      - 6paster migrate --config /etc/6paster/config.yaml && exec 6paster serve --config /etc/6paster/config.yaml
+    restart: unless-stopped
+
+networks:
+  proxy:
+    internal: true
+```
+
+This is a structural example, not a complete proxy deployment. An `internal`
+network prevents external routing from that network; attach the proxy to a
+second ingress-capable network as required by its deployment.

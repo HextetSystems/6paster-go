@@ -1,0 +1,50 @@
+{{define "form"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #e8e8e8; color: #1b1b1b; }
+    main, footer { width: min(92vw, 48rem); margin-inline: auto; }
+    main { padding-top: 3rem; }
+    textarea { box-sizing: border-box; width: 100%; min-height: 25rem; padding: .75rem; resize: vertical; font: .95rem ui-monospace, monospace; }
+    .row { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
+    button { padding: .55rem 1.25rem; }
+    .hint, .error { padding: .8rem; margin-top: 1.5rem; border-radius: .25rem; }
+    .hint { background: #f7f7f7; overflow-wrap: anywhere; }
+    .error { background: #fee; color: #800; border: 1px solid #d99; }
+    footer { margin-top: 2rem; padding: 1rem 0 3rem; color: #555; font-size: .85rem; border-top: 1px solid #aaa; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #202124; color: #eee; } .hint { background: #303134; }
+      footer { color: #bbb; } .error { background: #431b1b; color: #ffdada; }
+    }
+  </style>
+</head>
+<body onload="document.forms.postform.content.focus()">
+<main>
+  <h1>Enter the text you want to share</h1>
+  <p>{{.MaximumKiB}} KiB maximum</p>
+  {{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+  <form name="postform" method="post" action="{{.Action}}">
+    <label for="content">Paste content</label>
+    <textarea id="content" name="content" required>{{.Content}}</textarea>
+    <div class="row">
+      <label for="ttl">Time to live</label>
+      <select id="ttl" name="ttl">
+        {{range .TTLs}}<option value="{{.Seconds}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+      <button type="submit">Save</button>
+    </div>
+  </form>
+  <div class="hint">
+    <strong>Command-line helper:</strong><br>
+    <code>6p() { curl -s -F "content=&lt;${1--}" -F ttl=604800 -w "%{redirect_url}\n" -o /dev/null {{.PublicURL}}; }</code>
+  </div>
+</main>
+<footer>
+  Pastes receive random, unlisted URLs and expire automatically. Do not treat an unlisted URL as an access-control mechanism.
+</footer>
+</body>
+</html>{{end}}

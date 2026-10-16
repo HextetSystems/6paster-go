@@ -1,0 +1,54 @@
+# Local development stack. Both application profiles publish port 8080;
+# production deployments should remove ports and use a private proxy network.
+services:
+  # Local SQLite profile. The named volume persists both the database and WAL.
+  sqlite:
+    profiles: ["sqlite"]
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      # Volume syntax is SOURCE:DESTINATION[:OPTIONS]:
+      #   SOURCE is on the host (or a Docker-managed named volume).
+      #   DESTINATION is the path inside the container.
+      # Keep database files in the named volume `sqlite-data`.
+      - sqlite-data:/var/lib/6paster
+      # Mount the host config file at the container config path, read-only (`ro`).
+      - ./deploy/config.sqlite.yaml:/etc/6paster/config.yaml:ro
+    # Apply migrations before accepting requests; migrate is safe to rerun.
+    command: ["/bin/sh", "-c", "6paster migrate --config /etc/6paster/config.yaml && exec 6paster serve --config /etc/6paster/config.yaml"]
+    restart: unless-stopped
+
+  mysql:
+    profiles: ["mysql"]
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: paste
+      MYSQL_USER: paster
+      MYSQL_PASSWORD: paster-local
+      MYSQL_ROOT_PASSWORD: root-local
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # Gate application startup on MySQL accepting connections.
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot-local"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  paster-mysql:
+    profiles: ["mysql"]
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./deploy/config.mysql.yaml:/etc/6paster/config.yaml:ro
+    command: ["/bin/sh", "-c", "6paster migrate --config /etc/6paster/config.yaml && exec 6paster serve --config /etc/6paster/config.yaml"]
+    restart: unless-stopped
+
+volumes:
+  sqlite-data:
+  mysql-data:

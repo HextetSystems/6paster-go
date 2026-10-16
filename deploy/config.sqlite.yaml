@@ -1,0 +1,20 @@
+server:
+  listen: ":8080"
+  public_url: "http://localhost:8080"
+  base_path: "/"
+  require_https: false
+  page_title: "6paster"
+database:
+  driver: sqlite
+  sqlite:
+    path: /var/lib/6paster/pastes.db
+paste:
+  minimum_ttl: 1h
+  maximum_ttl: 720h
+  maximum_bytes: 307200
+  allow_images: true
+rate_limit:
+  per_hour: 60
+  per_day: 100
+cleanup:
+  interval: 1h

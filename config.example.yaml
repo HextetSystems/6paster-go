@@ -1,0 +1,32 @@
+server:
+  listen: ":8080"
+  public_url: "https://paste.example.com"
+  base_path: "/"
+  require_https: true
+  page_title: "6paster"
+  trusted_proxies: [] # e.g. ["127.0.0.1/32", "::1/128"] for a local reverse proxy
+
+database:
+  driver: "sqlite" # sqlite or mysql
+  sqlite:
+    path: "./6paster.db"
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    user: "paster"
+    password: "change-me"
+    database: "paste"
+    tls_mode: "disabled" # disabled, preferred, required, or skip-verify
+
+paste:
+  minimum_ttl: 1h
+  maximum_ttl: 720h
+  maximum_bytes: 307200
+  allow_images: true
+
+rate_limit:
+  per_hour: 60
+  per_day: 100
+
+cleanup:
+  interval: 1h
