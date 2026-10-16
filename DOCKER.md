@@ -18,6 +18,23 @@ The default image command starts the server but does not apply migrations.
 Apply migrations before starting a newly deployed version. The local Compose
 services demonstrate this by running `6paster migrate` before `6paster serve`.
 
+## Published images
+
+Version tags publish a multi-platform image for Linux AMD64 and ARM64 at
+`ghcr.io/hextetsystems/6paster-go`. For a `v1.2.3` release, any of these tags can
+be pulled:
+
+```sh
+docker pull ghcr.io/hextetsystems/6paster-go:1.2.3
+docker pull ghcr.io/hextetsystems/6paster-go:1.2
+docker pull ghcr.io/hextetsystems/6paster-go:1
+docker pull ghcr.io/hextetsystems/6paster-go:latest
+```
+
+Use the exact version in production for reproducible deployments. Stable
+releases update all four tags. Prerelease tags publish only their exact version
+and do not move `latest`.
+
 ## Local Compose profiles
 
 Start the SQLite profile:
@@ -106,3 +123,20 @@ networks:
 This is a structural example, not a complete proxy deployment. An `internal`
 network prevents external routing from that network; attach the proxy to a
 second ingress-capable network as required by its deployment.
+
+## Publishing a release
+
+After the intended commit has passed CI on `main`, create and push an annotated
+semantic-version tag:
+
+```sh
+git switch main
+git pull --ff-only
+git tag -a v1.2.3 -m "v1.2.3"
+git push origin v1.2.3
+```
+
+The tag runs CI again. After it passes, GoReleaser publishes the Linux AMD64
+and ARM64 archives, checksum file, and changelog to a GitHub Release, while the
+Docker workflow publishes the GHCR image tags described above. Do not move or
+reuse a published version tag; create a new version instead.
