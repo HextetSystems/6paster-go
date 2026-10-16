@@ -8,7 +8,7 @@ COPY . .
 # modernc SQLite is pure Go, so the release binary does not need libc or CGO.
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/6paster ./cmd/6paster
 
-FROM alpine:3.23
+FROM alpine:3.24
 # The service runs unprivileged; /var/lib/6paster remains writable for SQLite.
 RUN apk add --no-cache ca-certificates \
     && addgroup -g 65532 -S paster \
