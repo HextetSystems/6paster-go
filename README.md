@@ -111,6 +111,21 @@ including applicable presets for one hour, four hours, one day, one week, and
 The query parameter `?smart` is accepted like any other ignored query parameter
 and does not enable syntax highlighting.
 
+### Command-line client
+
+[6p-go](https://github.com/hextetsystems/6p-go) is a companion CLI client with
+prebuilt releases for Windows, macOS, and Linux. It uses the same invocation as
+the original 6paster Bash function, but packages it as a standalone executable
+that is easier to install and manage:
+
+```sh
+6p example.txt
+echo "hello" | 6p
+```
+
+See the client repository for downloads, installation, and server
+configuration.
+
 ## Reverse proxy and URL prefix
 
 TLS is normally terminated by a reverse proxy. With `require_https: true`, a
