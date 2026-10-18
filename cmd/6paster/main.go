@@ -18,8 +18,8 @@ import (
 )
 
 const usage = `Usage:
-  6paster serve --config config.yaml
-  6paster migrate --config config.yaml`
+  6paster serve [--config config.yaml]
+  6paster migrate [--config config.yaml]`
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -38,6 +38,12 @@ func run(args []string) error {
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
+	configExplicit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "config" {
+			configExplicit = true
+		}
+	})
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected arguments: %v\n%s", fs.Args(), usage)
 	}
@@ -45,7 +51,13 @@ func run(args []string) error {
 		return fmt.Errorf("unknown command %q\n%s", args[0], usage)
 	}
 
-	cfg, err := config.Load(*configPath)
+	var cfg config.Config
+	var err error
+	if configExplicit {
+		cfg, err = config.Load(*configPath)
+	} else {
+		cfg, err = config.LoadOptional(*configPath)
+	}
 	if err != nil {
 		return err
 	}
@@ -76,7 +88,7 @@ func serve(cfg config.Config, store *storage.Store) error {
 	defer stop()
 
 	if err := store.CheckSchema(ctx); err != nil {
-		return fmt.Errorf("database is not migrated (run `6paster migrate --config ...`): %w", err)
+		return fmt.Errorf("database is not migrated (run `6paster migrate` with the same configuration): %w", err)
 	}
 	if err := store.Cleanup(ctx, time.Now().UTC()); err != nil {
 		return fmt.Errorf("initial cleanup: %w", err)

@@ -19,4 +19,4 @@ COPY --from=build /out/6paster /usr/local/bin/6paster
 USER 65532:65532
 # EXPOSE is metadata only. Production should publish only the reverse proxy.
 EXPOSE 8080
-CMD ["6paster", "serve", "--config", "/etc/6paster/config.yaml"]
+CMD ["6paster", "serve"]

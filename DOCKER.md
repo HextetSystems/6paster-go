@@ -11,12 +11,60 @@ docker build -t 6paster-go .
 
 The final Alpine image contains only the statically built application and CA
 certificates. It runs as the unprivileged user and group `65532:65532`. The
-image declares port 8080 and expects its configuration at
-`/etc/6paster/config.yaml`.
+image declares port 8080 and accepts configuration through `SIXPASTER_*`
+environment variables or an optional YAML file.
 
 The default image command starts the server but does not apply migrations.
 Apply migrations before starting a newly deployed version. The local Compose
 services demonstrate this by running `6paster migrate` before `6paster serve`.
+
+## Run the published image with Compose
+
+[`compose.ghcr.yaml`](compose.ghcr.yaml) is a standalone Compose file for
+deploying the published GHCR image; it does not build from this repository.
+Create an environment file and set at least the public URL for your deployment:
+
+```sh
+cp .env.example .env
+# Edit .env and set SIXPASTER_SERVER_PUBLIC_URL before continuing.
+docker compose -f compose.ghcr.yaml pull
+docker compose -f compose.ghcr.yaml up -d
+```
+
+The example uses SQLite at `/var/lib/6paster/pastes.db` and includes every
+supported application setting. The default image is
+`ghcr.io/hextetsystems/6paster-go:latest`. Set `PASTER_VERSION` in `.env` to a
+specific released version to pin the deployment, or override it for one run:
+
+```sh
+PASTER_VERSION=1.2.3 docker compose -f compose.ghcr.yaml up -d
+```
+
+The service is intentionally bound only to `127.0.0.1:8080`; put a TLS reverse
+proxy in front of it for public access. The `paster-data` named volume persists
+the SQLite database and its WAL files across container upgrades.
+
+## Configuration precedence
+
+Configuration is applied in this order: built-in defaults, optional YAML, then
+`SIXPASTER_*` environment variables. Environment variables therefore override
+matching YAML values. With no `--config` flag, `config.yaml` is loaded when it
+exists and otherwise configuration comes from defaults and the environment.
+An explicitly requested file must exist.
+
+Advanced Compose users can use YAML by adding this mount to the service:
+
+```yaml
+volumes:
+  - ./config.yaml:/etc/6paster/config.yaml:ro
+```
+
+Then add the explicit path to both commands while retaining `env_file` if
+environment overrides are desired:
+
+```yaml
+command: ["/bin/sh", "-c", "6paster migrate --config /etc/6paster/config.yaml && exec 6paster serve --config /etc/6paster/config.yaml"]
+```
 
 ## Published images
 

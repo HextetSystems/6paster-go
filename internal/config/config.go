@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -95,29 +96,168 @@ func defaults() Config {
 }
 
 func Load(filename string) (Config, error) {
+	return load(filename, false)
+}
+
+// LoadOptional loads filename when it exists, then applies environment
+// overrides. A missing file is treated as an environment-only configuration.
+func LoadOptional(filename string) (Config, error) {
+	return load(filename, true)
+}
+
+func load(filename string, optional bool) (Config, error) {
+	cfg := defaults()
 	f, err := os.Open(filename)
 	if err != nil {
-		return Config{}, fmt.Errorf("open config %q: %w", filename, err)
-	}
-	defer f.Close()
-
-	cfg := defaults()
-	dec := yaml.NewDecoder(f)
-	dec.KnownFields(true)
-	if err := dec.Decode(&cfg); err != nil {
-		return Config{}, fmt.Errorf("decode config %q: %w", filename, err)
-	}
-	var extra any
-	if err := dec.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return Config{}, errors.New("config must contain exactly one YAML document")
+		if !optional || !errors.Is(err, os.ErrNotExist) {
+			return Config{}, fmt.Errorf("open config %q: %w", filename, err)
 		}
-		return Config{}, fmt.Errorf("decode trailing config: %w", err)
+	} else {
+		defer f.Close()
+		dec := yaml.NewDecoder(f)
+		dec.KnownFields(true)
+		if err := dec.Decode(&cfg); err != nil {
+			return Config{}, fmt.Errorf("decode config %q: %w", filename, err)
+		}
+		var extra any
+		if err := dec.Decode(&extra); err != io.EOF {
+			if err == nil {
+				return Config{}, errors.New("config must contain exactly one YAML document")
+			}
+			return Config{}, fmt.Errorf("decode trailing config: %w", err)
+		}
+	}
+
+	if err := applyEnvironment(&cfg); err != nil {
+		return Config{}, err
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, fmt.Errorf("validate config: %w", err)
 	}
 	return cfg, nil
+}
+
+func applyEnvironment(cfg *Config) error {
+	setString("SIXPASTER_SERVER_LISTEN", &cfg.Server.Listen)
+	setString("SIXPASTER_SERVER_PUBLIC_URL", &cfg.Server.PublicURL)
+	setString("SIXPASTER_SERVER_BASE_PATH", &cfg.Server.BasePath)
+	setString("SIXPASTER_SERVER_PAGE_TITLE", &cfg.Server.PageTitle)
+	setString("SIXPASTER_DATABASE_DRIVER", &cfg.Database.Driver)
+	setString("SIXPASTER_DATABASE_SQLITE_PATH", &cfg.Database.SQLite.Path)
+	setString("SIXPASTER_DATABASE_MYSQL_HOST", &cfg.Database.MySQL.Host)
+	setString("SIXPASTER_DATABASE_MYSQL_USER", &cfg.Database.MySQL.User)
+	setString("SIXPASTER_DATABASE_MYSQL_PASSWORD", &cfg.Database.MySQL.Password)
+	setString("SIXPASTER_DATABASE_MYSQL_DATABASE", &cfg.Database.MySQL.Database)
+	setString("SIXPASTER_DATABASE_MYSQL_TLS_MODE", &cfg.Database.MySQL.TLSMode)
+
+	if err := setBool("SIXPASTER_SERVER_REQUIRE_HTTPS", &cfg.Server.RequireHTTPS); err != nil {
+		return err
+	}
+	if err := setBool("SIXPASTER_PASTE_ALLOW_IMAGES", &cfg.Paste.AllowImages); err != nil {
+		return err
+	}
+	if err := setPort("SIXPASTER_DATABASE_MYSQL_PORT", &cfg.Database.MySQL.Port); err != nil {
+		return err
+	}
+	if err := setInt("SIXPASTER_RATE_LIMIT_PER_HOUR", &cfg.RateLimit.PerHour); err != nil {
+		return err
+	}
+	if err := setInt("SIXPASTER_RATE_LIMIT_PER_DAY", &cfg.RateLimit.PerDay); err != nil {
+		return err
+	}
+	if err := setInt64("SIXPASTER_PASTE_MAXIMUM_BYTES", &cfg.Paste.MaximumBytes); err != nil {
+		return err
+	}
+	if err := setDuration("SIXPASTER_PASTE_MINIMUM_TTL", &cfg.Paste.MinimumTTL); err != nil {
+		return err
+	}
+	if err := setDuration("SIXPASTER_PASTE_MAXIMUM_TTL", &cfg.Paste.MaximumTTL); err != nil {
+		return err
+	}
+	if err := setDuration("SIXPASTER_CLEANUP_INTERVAL", &cfg.Cleanup.Interval); err != nil {
+		return err
+	}
+	if value, ok := os.LookupEnv("SIXPASTER_SERVER_TRUSTED_PROXIES"); ok {
+		cfg.Server.TrustedProxies = nil
+		if strings.TrimSpace(value) != "" {
+			for _, value := range strings.Split(value, ",") {
+				cidr := strings.TrimSpace(value)
+				if _, _, err := net.ParseCIDR(cidr); err != nil {
+					return fmt.Errorf("parse SIXPASTER_SERVER_TRUSTED_PROXIES: invalid CIDR %q", cidr)
+				}
+				cfg.Server.TrustedProxies = append(cfg.Server.TrustedProxies, cidr)
+			}
+		}
+	}
+	return nil
+}
+
+func setString(name string, target *string) {
+	if value, ok := os.LookupEnv(name); ok {
+		*target = value
+	}
+}
+
+func setBool(name string, target *bool) error {
+	value, ok := os.LookupEnv(name)
+	if !ok {
+		return nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", name, err)
+	}
+	*target = parsed
+	return nil
+}
+
+func setInt(name string, target *int) error {
+	value, ok := os.LookupEnv(name)
+	if !ok {
+		return nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", name, err)
+	}
+	*target = parsed
+	return nil
+}
+
+func setPort(name string, target *int) error {
+	if err := setInt(name, target); err != nil {
+		return err
+	}
+	if _, ok := os.LookupEnv(name); ok && (*target <= 0 || *target > 65535) {
+		return fmt.Errorf("parse %s: port must be between 1 and 65535", name)
+	}
+	return nil
+}
+
+func setInt64(name string, target *int64) error {
+	value, ok := os.LookupEnv(name)
+	if !ok {
+		return nil
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", name, err)
+	}
+	*target = parsed
+	return nil
+}
+
+func setDuration(name string, target *Duration) error {
+	value, ok := os.LookupEnv(name)
+	if !ok {
+		return nil
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", name, err)
+	}
+	target.Duration = parsed
+	return nil
 }
 
 func (c *Config) Validate() error {

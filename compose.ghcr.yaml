@@ -1,0 +1,18 @@
+# Standalone deployment using the published image. Copy .env.example to .env
+# and customize it before starting the service.
+services:
+  paster:
+    image: ghcr.io/hextetsystems/6paster-go:${PASTER_VERSION:-latest}
+    env_file:
+      - .env
+    ports:
+      # Bind only to localhost; put a TLS reverse proxy in front for public use.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - paster-data:/var/lib/6paster
+    # Migrations are safe to rerun and must finish before the server starts.
+    command: ["/bin/sh", "-c", "6paster migrate && exec 6paster serve"]
+    restart: unless-stopped
+
+volumes:
+  paster-data:
