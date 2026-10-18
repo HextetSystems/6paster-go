@@ -110,6 +110,37 @@ func TestFormAndBasePath(t *testing.T) {
 	}
 }
 
+func TestHealthEndpoint(t *testing.T) {
+	cfg := testConfig()
+	cfg.Server.RequireHTTPS = true
+	h, err := New(cfg, &fakeStore{panic: "health endpoint touched store"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		r := httptest.NewRequest(method, "/health", nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "text/plain; charset=utf-8" || w.Header().Get("Content-Length") != "3" {
+			t.Fatalf("%s /health: status=%d headers=%v body=%q", method, w.Code, w.Header(), w.Body.String())
+		}
+		if method == http.MethodGet && w.Body.String() != "ok\n" {
+			t.Fatalf("GET /health body=%q", w.Body.String())
+		}
+		if method == http.MethodHead && w.Body.Len() != 0 {
+			t.Fatalf("HEAD /health body=%q", w.Body.String())
+		}
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/health", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "GET, HEAD" {
+		t.Fatalf("POST /health: status=%d Allow=%q", w.Code, w.Header().Get("Allow"))
+	}
+}
+
 func TestRoutingStatusesAndRobots(t *testing.T) {
 	h := newTestHandler(t, &fakeStore{})
 	tests := []struct {

@@ -17,6 +17,9 @@ environment variables or an optional YAML file.
 The default image command starts the server but does not apply migrations.
 Apply migrations before starting a newly deployed version. The local Compose
 services demonstrate this by running `6paster migrate` before `6paster serve`.
+The image health check requests `GET /health` on port 8080 every 30 seconds.
+The endpoint is independent of `server.base_path` and HTTPS enforcement so it
+can be checked from inside the container without traversing the public proxy.
 
 ## Run the published image with Compose
 

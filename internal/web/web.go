@@ -79,6 +79,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 	}
 	h.setSecurityHeaders(w)
+	if r.URL.Path == "/health" {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead:
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Content-Length", "3")
+			if r.Method == http.MethodGet {
+				_, _ = io.WriteString(w, "ok\n")
+			}
+		default:
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "Method not allowed.", http.StatusMethodNotAllowed)
+		}
+		return
+	}
 	if h.cfg.Server.RequireHTTPS && !secure {
 		h.renderError(w, http.StatusUpgradeRequired, "HTTPS is required for this service.")
 		return

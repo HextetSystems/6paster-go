@@ -19,4 +19,6 @@ COPY --from=build /out/6paster /usr/local/bin/6paster
 USER 65532:65532
 # EXPOSE is metadata only. Production should publish only the reverse proxy.
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1
 CMD ["6paster", "serve"]
