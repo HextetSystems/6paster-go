@@ -47,6 +47,45 @@ The service is intentionally bound only to `127.0.0.1:8080`; put a TLS reverse
 proxy in front of it for public access. The `paster-data` named volume persists
 the SQLite database and its WAL files across container upgrades.
 
+## Nginx reverse proxy
+
+[`deploy/nginx.conf`](deploy/nginx.conf) is a ready-to-customize Nginx site for
+the host-level proxy arrangement used by `compose.ghcr.yaml`. It terminates TLS,
+redirects HTTP to HTTPS, proxies to `127.0.0.1:8080`, and replaces the forwarded
+scheme and client-address headers consumed by 6paster.
+
+Before enabling it, replace `paste.example.com` everywhere in the file and
+ensure the configured certificate and private-key files exist. On a typical
+Debian or Ubuntu Nginx installation:
+
+```sh
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/6paster
+sudo editor /etc/nginx/sites-available/6paster
+sudo ln -s /etc/nginx/sites-available/6paster /etc/nginx/sites-enabled/6paster
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Match the public URL in `.env` and configure `trusted_proxies` for the source
+address the container sees for host-originated traffic:
+
+```env
+SIXPASTER_SERVER_PUBLIC_URL=https://paste.example.com
+SIXPASTER_SERVER_REQUIRE_HTTPS=true
+SIXPASTER_SERVER_TRUSTED_PROXIES=<compose-network-gateway>/32
+```
+
+Docker commonly presents host traffic as the Compose network's bridge gateway,
+not `127.0.0.1`. Obtain the gateway from `docker network inspect
+<project>_default` after creating the stack. Trust only that address; otherwise
+6paster deliberately ignores Nginx's client-IP headers and rate limits the
+proxy address instead of the originating client.
+
+If `SIXPASTER_PASTE_MAXIMUM_BYTES` is raised substantially, also raise Nginx's
+`client_max_body_size` enough to accommodate the paste and multipart overhead.
+The sample forwards every request path unchanged, so it also works with a
+configured `SIXPASTER_SERVER_BASE_PATH`.
+
 ## Configuration precedence
 
 Configuration is applied in this order: built-in defaults, optional YAML, then
@@ -137,11 +176,12 @@ configuration file.
 
 ## Production networking
 
-Do not publish the application port directly in production. Put 6paster and its
-Nginx, Caddy, or Traefik proxy on a private Docker network, omit `ports` from the
-application service, and make the proxy the only public ingress. Keep unrelated
-or untrusted containers off that network because they could otherwise bypass
-the proxy.
+Do not publish the application port on a public interface in production. Bind
+it to localhost for a host-level proxy as `compose.ghcr.yaml` does, or put
+6paster and a containerized Nginx, Caddy, or Traefik proxy on a private Docker
+network. In the latter arrangement, omit `ports` from the application service
+and make the proxy the only public ingress. Keep unrelated or untrusted
+containers off that network because they could otherwise bypass the proxy.
 
 Enable `server.require_https` and configure the proxy to replace
 `X-Forwarded-Proto` with the scheme it observed. Configure `trusted_proxies`

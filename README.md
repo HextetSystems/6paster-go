@@ -166,6 +166,10 @@ server:
 Configure the proxy to forward that prefix unchanged. The form action,
 redirect locations, and command-line hint will all include it.
 
+A complete host-level Nginx site configuration is provided at
+[`deploy/nginx.conf`](deploy/nginx.conf). See [DOCKER.md](DOCKER.md#nginx-reverse-proxy)
+for installation and matching environment settings.
+
 ## Containers
 
 See [DOCKER.md](DOCKER.md) for image builds, local SQLite and MySQL Compose
