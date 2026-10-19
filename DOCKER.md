@@ -52,7 +52,9 @@ the SQLite database and its WAL files across container upgrades.
 [`deploy/nginx.conf`](deploy/nginx.conf) is a ready-to-customize Nginx site for
 the host-level proxy arrangement used by `compose.ghcr.yaml`. It terminates TLS,
 redirects HTTP to HTTPS, proxies to `127.0.0.1:8080`, and replaces the forwarded
-scheme and client-address headers consumed by 6paster.
+scheme and client-address headers consumed by 6paster. Only `/`, `/robots.txt`,
+`/health`, and valid 24-character `/p/...` URLs are proxied; Nginx returns 404
+for every other path without contacting the application.
 
 Before enabling it, replace `paste.example.com` everywhere in the file and
 ensure the configured certificate and private-key files exist. On a typical
@@ -83,8 +85,19 @@ proxy address instead of the originating client.
 
 If `SIXPASTER_PASTE_MAXIMUM_BYTES` is raised substantially, also raise Nginx's
 `client_max_body_size` enough to accommodate the paste and multipart overhead.
-The sample forwards every request path unchanged, so it also works with a
-configured `SIXPASTER_SERVER_BASE_PATH`.
+
+The supplied locations assume `SIXPASTER_SERVER_BASE_PATH=/`. For a prefix such
+as `/tools/paste`, change the application locations to the following while
+leaving `/health` at the root:
+
+```nginx
+location = /tools/paste { proxy_pass http://127.0.0.1:8080; }
+location = /tools/paste/ { proxy_pass http://127.0.0.1:8080; }
+location = /tools/paste/robots.txt { proxy_pass http://127.0.0.1:8080; }
+location ~ "^/tools/paste/p/[A-Za-z0-9]{24}/?$" {
+    proxy_pass http://127.0.0.1:8080;
+}
+```
 
 ## Configuration precedence
 
