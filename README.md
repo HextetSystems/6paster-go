@@ -46,7 +46,7 @@ raw text or configured image content, and the parameter is safely ignored.
 
 ## Build and configure
 
-Go 1.26 or newer is required.
+Go 1.27.3 or newer is required.
 
 ```sh
 make build
