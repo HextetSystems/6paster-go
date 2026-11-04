@@ -1,0 +1,16 @@
+# Production deployment using the published image and a host-level TLS proxy.
+# Copy deploy/.env.example to deploy/.env and set its public URL and proxy CIDR.
+services:
+  paster:
+    image: ghcr.io/hextetsystems/6paster-go:${PASTER_VERSION:-latest}
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - paster-data:/var/lib/6paster
+    command: ["/bin/sh", "-c", "6paster migrate && exec 6paster serve"]
+    restart: unless-stopped
+
+volumes:
+  paster-data:

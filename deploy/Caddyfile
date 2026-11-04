@@ -1,0 +1,26 @@
+# Replace the hostname. Caddy obtains and renews TLS certificates automatically.
+paste.example.com {
+	@metrics path /metrics
+	@localMetrics {
+		path /metrics
+		remote_ip 127.0.0.1 ::1
+	}
+	@root path /
+	@health path /health
+	@paste path_regexp paste ^/p/[A-Za-z0-9]{24}/?$
+
+	handle @localMetrics {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle @root {
+		reverse_proxy 127.0.0.1:8080
+	}
+	respond /robots.txt "User-agent: *\nDisallow: /\n" 200
+	handle @health {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle @paste {
+		reverse_proxy 127.0.0.1:8080
+	}
+	respond 404
+}

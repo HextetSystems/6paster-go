@@ -166,15 +166,15 @@ server:
 Configure the proxy to forward that prefix unchanged. The form action,
 redirect locations, and command-line hint will all include it.
 
-A complete host-level Nginx site configuration is provided at
-[`deploy/nginx.conf`](deploy/nginx.conf). See [DOCKER.md](DOCKER.md#nginx-reverse-proxy)
-for installation and matching environment settings.
+Host-level Apache, Caddy, and Nginx examples are provided in `deploy/`, along
+with a Compose deployment file. See [DOCKER.md](DOCKER.md#production-deployment-files)
+for startup, proxy setup, and trusted-proxy configuration.
 
 ## Containers
 
-See [DOCKER.md](DOCKER.md) for image builds, local SQLite and MySQL Compose
-profiles, persistent storage, configuration mounts, migrations, and production
-reverse-proxy networking.
+See [DOCKER.md](DOCKER.md) for image builds, production deployment with Apache,
+Caddy, or Nginx, local SQLite and MySQL Compose profiles, persistent storage,
+configuration mounts, migrations, and proxy networking.
 
 ## Operations and security
 
@@ -186,6 +186,8 @@ reverse-proxy networking.
 - Successful submission events and their SHA-256 client identifiers are kept
   in dedicated throttling tables for at most 24 hours. Paste rows contain no
   client identifier.
+- The `/metrics` endpoint exposes Prometheus request counters and duration
+  histograms. Restrict it to trusted monitoring clients at the reverse proxy.
 - Paste URLs are unlisted, not authenticated. Anyone with a URL can read it.
 - There is intentionally no CSRF check because cross-origin posting is a
   supported use case.

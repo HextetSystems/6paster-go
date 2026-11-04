@@ -21,11 +21,52 @@ The image health check requests `GET /health` on port 8080 every 30 seconds.
 The endpoint is independent of `server.base_path` and HTTPS enforcement so it
 can be checked from inside the container without traversing the public proxy.
 
+## Production deployment files
+
+[`deploy/compose.yaml`](deploy/compose.yaml) runs the published GHCR image with
+SQLite persistence, applies migrations before serving, and binds the app only
+to `127.0.0.1:8080` for a host-level TLS proxy. Start with:
+
+```sh
+cp deploy/.env.example deploy/.env
+cd deploy
+# Edit .env: set SIXPASTER_SERVER_PUBLIC_URL. You can set the proxy CIDR after
+# starting once and inspecting the Compose network gateway.
+docker compose pull
+docker compose up -d
+```
+
+The sample proxy configs are [`deploy/apache.conf`](deploy/apache.conf),
+[`deploy/nginx.conf`](deploy/nginx.conf), and
+[`deploy/Caddyfile`](deploy/Caddyfile). Each assumes the service is reachable
+at `127.0.0.1:8080`, uses `/` as the base path, forwards the original host and
+HTTPS scheme, and allows only the app routes (including valid 24-character
+paste URLs). Metrics are limited to local scrapers. Replace
+`paste.example.com`; Apache and Nginx also need certificate paths configured.
+Caddy obtains certificates automatically.
+
+The proxy address is easiest to discover after first startup. From the
+repository root, inspect the service network:
+
+```sh
+docker network inspect deploy_default
+```
+
+Find the network's `IPAM.Config[].Gateway`, set
+`SIXPASTER_SERVER_TRUSTED_PROXIES=<gateway>/32` in `deploy/.env`, then recreate
+the service with `docker compose up -d`. Without this, the application ignores
+forwarding headers and rate-limits the proxy address. The proxy must replace
+`X-Forwarded-Proto` and the client address header, and the application port
+must remain inaccessible to public clients.
+
 ## Run the published image with Compose
 
-[`compose.ghcr.yaml`](compose.ghcr.yaml) is a standalone Compose file for
-deploying the published GHCR image; it does not build from this repository.
-Create an environment file and set at least the public URL for your deployment:
+[`compose.ghcr.yaml`](compose.ghcr.yaml) is a root-level standalone Compose
+file retained for compatibility; [`deploy/compose.yaml`](deploy/compose.yaml)
+is the deployment-directory version. Both deploy the published GHCR image and
+do not build from this repository.
+For this root-level variant, create an environment file and set at least the
+public URL for your deployment:
 
 ```sh
 cp .env.example .env
@@ -50,11 +91,13 @@ the SQLite database and its WAL files across container upgrades.
 ## Nginx reverse proxy
 
 [`deploy/nginx.conf`](deploy/nginx.conf) is a ready-to-customize Nginx site for
-the host-level proxy arrangement used by `compose.ghcr.yaml`. It terminates TLS,
+the host-level proxy arrangement used by `deploy/compose.yaml`. It terminates TLS,
 redirects HTTP to HTTPS, proxies to `127.0.0.1:8080`, and replaces the forwarded
 scheme and client-address headers consumed by 6paster. Only `/`, `/robots.txt`,
-`/health`, and valid 24-character `/p/...` URLs are proxied; Nginx returns 404
-for every other path without contacting the application.
+`/health`, `/metrics`, and valid 24-character `/p/...` URLs are proxied; Nginx
+returns 404 for every other path without contacting the application. The
+`/metrics` route is restricted to loopback clients by Nginx and is intended for
+a local Prometheus scraper.
 
 Before enabling it, replace `paste.example.com` everywhere in the file and
 ensure the configured certificate and private-key files exist. On a typical
@@ -157,8 +200,8 @@ before serving, and persist database data in named volumes. Stop a profile with
 `docker compose --profile PROFILE down`. Add `--volumes` only when you also
 intend to delete its database data.
 
-The checked-in files under `deploy/` are local examples. They disable HTTPS and
-use development-only MySQL credentials; do not reuse those settings in
+The `deploy/config.*.yaml` files are local examples. They disable HTTPS and the
+MySQL sample uses development-only credentials; do not reuse those settings in
 production.
 
 ## Mounts and persistence
@@ -231,7 +274,7 @@ second ingress-capable network as required by its deployment.
 ## Publishing a release
 
 After the intended commit has passed CI on `main`, create and push an annotated
-semantic-version tag:
+semantic-version tag (for example, `v1.2.3`):
 
 ```sh
 git switch main

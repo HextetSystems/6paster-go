@@ -141,6 +141,57 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
+func TestMetricsEndpointAndRequestSeries(t *testing.T) {
+	cfg := testConfig()
+	cfg.Server.RequireHTTPS = true
+	h, err := New(cfg, &fakeStore{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		method, path string
+		status       int
+	}{
+		{http.MethodGet, "/tools/paste/", http.StatusUpgradeRequired},
+		{http.MethodGet, "/tools/paste/p/abcdefghijklmnopqrstuvwx", http.StatusUpgradeRequired},
+		{http.MethodGet, "/outside", http.StatusUpgradeRequired},
+	} {
+		r := httptest.NewRequest(tc.method, tc.path, nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.status {
+			t.Fatalf("%s %s status=%d", tc.method, tc.path, w.Code)
+		}
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "text/plain; version=0.0.4; charset=utf-8" {
+		t.Fatalf("GET /metrics: status=%d content-type=%q", w.Code, w.Header().Get("Content-Type"))
+	}
+	body := w.Body.String()
+	for _, want := range []string{
+		"# TYPE sixpaster_http_requests_total counter",
+		`sixpaster_http_requests_total{method="GET",route="/",status="426"} 1`,
+		`sixpaster_http_requests_total{method="GET",route="/p/{id}",status="426"} 1`,
+		`sixpaster_http_requests_total{method="GET",route="other",status="426"} 1`,
+		`sixpaster_http_request_duration_seconds_count{method="GET",route="other",status="426"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("metrics missing %q in:\n%s", want, body)
+		}
+	}
+
+	r = httptest.NewRequest(http.MethodPost, "/metrics", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "GET" {
+		t.Fatalf("POST /metrics: status=%d Allow=%q", w.Code, w.Header().Get("Allow"))
+	}
+}
+
 func TestRoutingStatusesAndRobots(t *testing.T) {
 	h := newTestHandler(t, &fakeStore{})
 	tests := []struct {

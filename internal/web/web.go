@@ -55,6 +55,7 @@ type Handler struct {
 	trustedProxies []*net.IPNet
 	now            func() time.Time
 	random         io.Reader
+	metrics        *requestMetrics
 }
 
 func New(cfg config.Config, store pasteStore, logger *slog.Logger) (http.Handler, error) {
@@ -69,7 +70,7 @@ func New(cfg config.Config, store pasteStore, logger *slog.Logger) (http.Handler
 	if err != nil {
 		return nil, err
 	}
-	h := &Handler{cfg: cfg, store: store, templates: templates, logger: logger, trustedProxies: trustedProxies, now: time.Now, random: rand.Reader}
+	h := &Handler{cfg: cfg, store: store, templates: templates, logger: logger, trustedProxies: trustedProxies, now: time.Now, random: rand.Reader, metrics: newRequestMetrics()}
 	return h.logging(h.recoverPanics(h)), nil
 }
 
@@ -91,6 +92,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Allow", "GET, HEAD")
 			http.Error(w, "Method not allowed.", http.StatusMethodNotAllowed)
 		}
+		return
+	}
+	if r.URL.Path == "/metrics" {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "Method not allowed.", http.StatusMethodNotAllowed)
+			return
+		}
+		h.metrics.serve(w)
 		return
 	}
 	if h.cfg.Server.RequireHTTPS && !secure {
@@ -540,7 +550,27 @@ func (h *Handler) logging(next http.Handler) http.Handler {
 			status = http.StatusOK
 		}
 		h.logger.Info("request", "method", r.Method, "path", r.URL.Path, "status", status, "duration", time.Since(started))
+		h.metrics.observe(r.Method, h.routeLabel(r.URL.Path), status, time.Since(started).Seconds())
 	})
+}
+
+func (h *Handler) routeLabel(path string) string {
+	rel, ok := h.relativePath(path)
+	if !ok {
+		return "other"
+	}
+	switch {
+	case rel == "/":
+		return "/"
+	case rel == "/health":
+		return "/health"
+	case rel == "/robots.txt":
+		return "/robots.txt"
+	case pasteID(rel) != "":
+		return "/p/{id}"
+	default:
+		return "other"
+	}
 }
 
 func (h *Handler) recoverPanics(next http.Handler) http.Handler {
