@@ -4,9 +4,9 @@ go 1.27.3
 
 require (
 	github.com/go-sql-driver/mysql v1.10.1
-	go.yaml.in/yaml/v3 v3.0.5
+	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/image v0.47.0
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.61.1
 )
 
 require (
